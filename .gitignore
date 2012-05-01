@@ -9,3 +9,4 @@ target/
 *.sublime-project
 *.sublime-workspace
 *.swp
+.cache
