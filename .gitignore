@@ -8,3 +8,4 @@ target/
 .scala_dependencies
 *.sublime-project
 *.sublime-workspace
+*.swp
