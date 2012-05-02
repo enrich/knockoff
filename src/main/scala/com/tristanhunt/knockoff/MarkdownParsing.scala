@@ -96,7 +96,6 @@ class ChunkParser extends RegexParsers with StringExtras {
   override def skipWhitespace = false
   
   def chunk : Parser[ Chunk ] = {
-    println("start")
     horizontalRule | leadingStrongTextBlock | leadingEmTextBlock  | bulletItem |
     numberedItem | indentedChunk | header | blockquote | fencedCode | linkDefinition |
     textBlockWithBreak | textBlock | emptyLines
@@ -108,53 +107,42 @@ class ChunkParser extends RegexParsers with StringExtras {
   def emptyLine : Parser[ Chunk ] =
     """[\t ]*\r?\n""".r ^^ ( str => EmptySpace( str ) )
 
-  def codeFence: Parser[Any] = """````\r?\n""".r ^^ { str =>
-    {
-      println("codefence " + str)
-      str
-    }
-  }
-  
-  def cfwithother : Parser[Chunk] = codeFence ~> textLine ^^ {
-    str => {
-      println("cfw: " + str)
-      str
-    }
-  }
-
+  // fenced code support.
+  // we take ANYTHING between the fences.
+  // looks like we can expect this to start on a line boundary.
+  // bleah, depends on lazy quantifier.  can't figure out how to make
+  // the parser operators lazy enough.
   def fencedCode: Parser[Chunk] =
-    codeFence ~> rep(textLine) <~ codeFence ^^ { seq =>
+    """```\r?\n""".r ~> """[\s\S]*?\r?\n```\r?\n""".r ^^ { seq =>
+
       {
-        val foo = foldedString(seq)
-        println("cfchunk " + foo)
-        FencedCodeChunk(foo)
+        // bleah, redoing the match because i can't figure out
+        // how to get the group out of the parser thing
+        val matchStr = """^([\s\S]*?\r?\n)```\r?\n$""".r
+          .findFirstMatchIn(seq).get;
+        FencedCodeChunk(matchStr.group(1))
       }
     }
-    
 
   def textBlockWithBreak : Parser[ Chunk ] =
     rep( textLineWithEnd ) ~ hardBreakTextLine ^^ { case seq ~ break => {
-      println("tbwb " + foldedString(seq) + break.content)
       TextChunk( foldedString(seq) + break.content ) }
     }
 
   def textBlock : Parser[ Chunk ] =
     rep1( textLine ) ^^ { seq => {
       val foo = foldedString(seq)
-      println("textblock " + foo)
       TextChunk( foo ) }
     }
   
   /** Match any line up until it ends with a newline. */
   def textLine : Parser[ Chunk ] =
     """[\t ]*\S[^\n]*\n?""".r ^^ { str =>{ 
-      println("textline " + str)
       TextChunk(str) 
       }}
 
   def textLineWithEnd : Parser[Chunk] =
     """[\t ]*\S[^\n]*[^ \n][ ]?\n""".r ^^ { str => {
-      println("textlinewithend " + str)
       TextChunk(str) }
     }
   
