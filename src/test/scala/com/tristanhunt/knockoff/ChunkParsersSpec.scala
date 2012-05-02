@@ -1,11 +1,11 @@
 package com.tristanhunt.knockoff
 
-//import org.junit.runner.RunWith
+import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.matchers._
 import org.scalatest._
 
-//@RunWith(classOf[JUnitRunner])
+@RunWith(classOf[JUnitRunner])
 class ChunkParsersSpec extends ChunkParser with Spec with ShouldMatchers {
 
   describe("ChunkParser") {
@@ -57,5 +57,7 @@ class ChunkParsersSpec extends ChunkParser with Spec with ShouldMatchers {
       val src = "\u000d\u000a"
       parse( chunk, src ).get should equal { EmptySpace(src) }
     }
+    
+
   }
 }

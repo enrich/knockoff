@@ -96,8 +96,9 @@ class ChunkParser extends RegexParsers with StringExtras {
   override def skipWhitespace = false
   
   def chunk : Parser[ Chunk ] = {
-    horizontalRule | leadingStrongTextBlock | leadingEmTextBlock | bulletItem |
-    numberedItem | indentedChunk | header | blockquote | linkDefinition |
+    println("start")
+    horizontalRule | leadingStrongTextBlock | leadingEmTextBlock  | bulletItem |
+    numberedItem | indentedChunk | header | blockquote | fencedCode | linkDefinition |
     textBlockWithBreak | textBlock | emptyLines
   }
   
@@ -107,18 +108,55 @@ class ChunkParser extends RegexParsers with StringExtras {
   def emptyLine : Parser[ Chunk ] =
     """[\t ]*\r?\n""".r ^^ ( str => EmptySpace( str ) )
 
+  def codeFence: Parser[Any] = """````\r?\n""".r ^^ { str =>
+    {
+      println("codefence " + str)
+      str
+    }
+  }
+  
+  def cfwithother : Parser[Chunk] = codeFence ~> textLine ^^ {
+    str => {
+      println("cfw: " + str)
+      str
+    }
+  }
+
+  def fencedCode: Parser[Chunk] =
+    codeFence ~> rep(textLine) <~ codeFence ^^ { seq =>
+      {
+        val foo = foldedString(seq)
+        println("cfchunk " + foo)
+        FencedCodeChunk(foo)
+      }
+    }
+    
+
   def textBlockWithBreak : Parser[ Chunk ] =
-    rep( textLineWithEnd ) ~ hardBreakTextLine ^^ { case seq ~ break => TextChunk( foldedString(seq) + break.content ) }
+    rep( textLineWithEnd ) ~ hardBreakTextLine ^^ { case seq ~ break => {
+      println("tbwb " + foldedString(seq) + break.content)
+      TextChunk( foldedString(seq) + break.content ) }
+    }
 
   def textBlock : Parser[ Chunk ] =
-    rep1( textLine ) ^^ { seq => TextChunk( foldedString(seq) ) }
+    rep1( textLine ) ^^ { seq => {
+      val foo = foldedString(seq)
+      println("textblock " + foo)
+      TextChunk( foo ) }
+    }
   
   /** Match any line up until it ends with a newline. */
   def textLine : Parser[ Chunk ] =
-    """[\t ]*\S[^\n]*\n?""".r ^^ { str => TextChunk(str) }
+    """[\t ]*\S[^\n]*\n?""".r ^^ { str =>{ 
+      println("textline " + str)
+      TextChunk(str) 
+      }}
 
   def textLineWithEnd : Parser[Chunk] =
-    """[\t ]*\S[^\n]*[^ \n][ ]?\n""".r ^^ { str => TextChunk(str) }
+    """[\t ]*\S[^\n]*[^ \n][ ]?\n""".r ^^ { str => {
+      println("textlinewithend " + str)
+      TextChunk(str) }
+    }
   
   def hardBreakTextLine : Parser[Chunk] =
     """[\t ]*\S[^\n]*[ ]{2}\n""".r ^^ { s => TextChunk(s) }
@@ -334,6 +372,17 @@ case object HorizontalRuleChunk extends Chunk {
                       spans : Seq[Span], position : Position,
                       discounter : Discounter ) {
     list += HorizontalRule( position )
+  }
+}
+
+case class FencedCodeChunk(val content: String) extends Chunk {
+  def appendNewBlock(list: ListBuffer[Block],
+    remaining: List[(Chunk, Seq[Span], Position)],
+    spans: Seq[Span], position: Position,
+    discounter: Discounter) {
+    spans.first match {
+      case text: Text => list += CodeBlock(text, position)
+    }
   }
 }
 
