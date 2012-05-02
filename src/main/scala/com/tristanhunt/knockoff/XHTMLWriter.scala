@@ -30,7 +30,7 @@ trait XHTMLWriter {
     case Header( level, spans, _ ) => headerToXHTML( level, spans )
     case LinkDefinition( _, _, _, _ ) => Group( Nil )
     case Blockquote( children, _ ) => blockquoteToXHTML( children )
-    case CodeBlock( text, _ ) => codeToXHTML( text )
+    case CodeBlock(options, text, _ ) => codeToXHTML(options, text )
     case HorizontalRule( _ ) => hrXHTML
     case OrderedItem( children, _ ) => liToXHTML( children )
     case UnorderedItem( children, _ ) => liToXHTML( children )
@@ -65,9 +65,10 @@ trait XHTMLWriter {
 
   def blockquoteToXHTML : Seq[Block] => Node =
     children => <blockquote>{ children.map( blockToXHTML(_) ) }</blockquote>
-  
-  def codeToXHTML : Text => Node =
-    text => <pre><code>{ text.content }</code></pre>
+
+  def codeToXHTML: (String, Text) => Node =
+    (options, text) => <pre><code>{ text.content }</code></pre>
+    
     
   def hrXHTML : Node = <hr/>
   

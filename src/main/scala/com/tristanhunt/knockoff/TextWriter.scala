@@ -30,7 +30,7 @@ trait TextWriter {
       case Header( _, spans, _ ) => spans.foreach( spanToText )
       case LinkDefinition( _, _, _, _ ) => {}
       case Blockquote( children, _ ) => children.foreach( blockToText )
-      case CodeBlock( text, _ ) => writer.write( text.content )
+      case CodeBlock(_, text, _ ) => writer.write( text.content )
       case HorizontalRule( _ ) => {}
       case OrderedItem( children, _ ) => children.foreach( blockToText )
       case UnorderedItem( children, _ ) => children.foreach( blockToText )

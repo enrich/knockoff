@@ -71,7 +71,7 @@ extends Block
 case class Blockquote( children : Seq[Block], position : Position )
 extends Block
 
-case class CodeBlock( text : Text, position : Position ) extends Block
+case class CodeBlock(options: String, text : Text, position : Position ) extends Block
 
 case class HorizontalRule( position : Position ) extends Block
 

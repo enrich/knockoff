@@ -49,6 +49,10 @@ package com.tristanhunt.knockoff
 import scala.util.parsing.combinator.Parsers
 import scala.util.parsing.input.{ CharSequenceReader, Position, Reader }
 import scala.util.logging.Logged
+import scala.util.parsing.combinator.RegexParsers
+import scala.collection.mutable.{ Buffer, ListBuffer }
+import scala.util.matching.Regex.Match
+import scala.util.matching.Regex
 
 trait ChunkStreamFactory extends Logged {
 
@@ -89,11 +93,27 @@ a markdown document.
 
 */
 
-import scala.util.parsing.combinator.RegexParsers
+
 
 class ChunkParser extends RegexParsers with StringExtras {
     
   override def skipWhitespace = false
+
+  // Custom regex parser to extract groups.
+  def regexMatch(r: Regex): Parser[Regex.Match] = new Parser[Regex.Match] {
+    def apply(in: Input) = {
+      val source = in.source
+      val offset = in.offset
+      val start = handleWhiteSpace(source, offset)
+      (r findPrefixMatchOf (source.subSequence(start, source.length))) match {
+        case Some(matched) =>
+          Success(matched,
+            in.drop(start + matched.end - offset))
+        case None =>
+          Failure("string matching regex `" + r + "' expected but `" + in.first + "' found", in.drop(start - offset))
+      }
+    }
+  }
   
   def chunk : Parser[ Chunk ] = {
     horizontalRule | leadingStrongTextBlock | leadingEmTextBlock  | bulletItem |
@@ -110,17 +130,20 @@ class ChunkParser extends RegexParsers with StringExtras {
   // fenced code support.
   // we take ANYTHING between the fences.
   // looks like we can expect this to start on a line boundary.
-  // bleah, depends on lazy quantifier.  can't figure out how to make
-  // the parser operators lazy enough.
+  // bleah, depends on lazy quantifier.
+  // NOTE: we don't support fenced code in indented items.
   def fencedCode: Parser[Chunk] =
-    """```\r?\n""".r ~> """[\s\S]*?\r?\n```\r?\n""".r ^^ { seq =>
-
+    regexMatch("""```([^\r\n]*)\r?\n([\s\S]*?\r?\n)```\r?\n""".r) ^^ { m =>
       {
         // bleah, redoing the match because i can't figure out
         // how to get the group out of the parser thing
-        val matchStr = """^([\s\S]*?\r?\n)```\r?\n$""".r
-          .findFirstMatchIn(seq).get;
-        FencedCodeChunk(matchStr.group(1))
+//        val matchStr = """^```\r?\n([\s\S]*?\r?\n)```\r?\n$""".r
+//          .findFirstMatchIn(seq).get;
+        
+        val options = m.group(1)
+        val code = m.group(2)
+        
+        FencedCodeChunk(options, code)
       }
     }
 
@@ -273,7 +296,7 @@ we've grabbed the spanning elements of each block, to construct the final
 
 */
 
-import scala.collection.mutable.{ Buffer, ListBuffer }
+
 
 trait Chunk {
   def content : String
@@ -333,7 +356,7 @@ case class EmptySpace( val content : String ) extends Chunk {
         remaining.head._1 match {
           case ice : IndentedChunk =>
             list.update( list.length - 1,
-                         CodeBlock( Text( lastCB.text.content + "\n" ),
+                         CodeBlock("", Text( lastCB.text.content + "\n" ),
                                     lastCB.position ) )
           case _ => {}
         }
@@ -363,14 +386,12 @@ case object HorizontalRuleChunk extends Chunk {
   }
 }
 
-case class FencedCodeChunk(val content: String) extends Chunk {
+case class FencedCodeChunk(options: String, content: String) extends Chunk {
   def appendNewBlock(list: ListBuffer[Block],
     remaining: List[(Chunk, Seq[Span], Position)],
     spans: Seq[Span], position: Position,
     discounter: Discounter) {
-    spans.first match {
-      case text: Text => list += CodeBlock(text, position)
-    }
+    list += CodeBlock(options, Text(content), position)
   }
 }
 
@@ -397,7 +418,7 @@ case class IndentedChunk( val content : String ) extends Chunk {
                       discounter : Discounter ) {
     if ( list.isEmpty ) {
       spans.first match {
-        case text : Text => list += CodeBlock( text, position )
+        case text : Text => list += CodeBlock("", text, position )
       }
     } else {
       list.last match {
@@ -412,16 +433,16 @@ case class IndentedChunk( val content : String ) extends Chunk {
             UnorderedItem( items.last.children ++ blocks, items.last.position )
           list.update( list.length - 1, UnorderedList( items.take( items.length - 1) ++ List(li) ) )
 
-        case CodeBlock( text, position ) =>
+        case CodeBlock(_, text, position ) =>
           spans.first match {
             case next : Text =>
               list.update( list.length - 1,
-                           CodeBlock(Text(text.content + next.content), position) )
+                           CodeBlock("", Text(text.content + next.content), position) )
           }
         
         case _ =>
           spans.first match {
-            case text : Text => list += CodeBlock( text, position )
+            case text : Text => list += CodeBlock("", text, position )
           }
       }
     }
@@ -560,7 +581,7 @@ substring of that span.
 
 */
 
-import scala.util.matching.Regex.Match
+
 
 class SpanConverter( definitions : Seq[LinkDefinitionChunk] )
 extends Function1[ Chunk, Seq[Span] ] with StringExtras {
