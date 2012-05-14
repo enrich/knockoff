@@ -53,11 +53,12 @@ import scala.util.parsing.combinator.RegexParsers
 import scala.collection.mutable.{ Buffer, ListBuffer }
 import scala.util.matching.Regex.Match
 import scala.util.matching.Regex
+import scala.util.logging.ConsoleLogger
 
 trait ChunkStreamFactory extends Logged {
 
   /** Overridable factory method. */
-  def newChunkParser : ChunkParser = new ChunkParser
+  def newChunkParser : ChunkParser = new ChunkParser with ConsoleLogger
 
   lazy val chunkParser : ChunkParser = newChunkParser
 
@@ -78,6 +79,7 @@ trait ChunkStreamFactory extends Logged {
         createChunkStream( next )
       }
       case chunkParser.Success( result, next ) => {
+        // log("chunk: " + result.getClass.getName + " "  + result.content)
         Stream.cons( ( result, reader.pos ), createChunkStream( next ) )
       }
     }
@@ -95,7 +97,7 @@ a markdown document.
 
 
 
-class ChunkParser extends RegexParsers with StringExtras {
+class ChunkParser extends RegexParsers with StringExtras with Logged {
     
   override def skipWhitespace = false
 
@@ -133,44 +135,47 @@ class ChunkParser extends RegexParsers with StringExtras {
   // bleah, depends on lazy quantifier.
   // NOTE: we don't support fenced code in indented items.
   def fencedCode: Parser[Chunk] =
-    regexMatch("""```([^\r\n]*)\r?\n([\s\S]*?\r?\n)```\r?\n""".r) ^^ { m =>
-      {
-        // bleah, redoing the match because i can't figure out
-        // how to get the group out of the parser thing
-//        val matchStr = """^```\r?\n([\s\S]*?\r?\n)```\r?\n$""".r
-//          .findFirstMatchIn(seq).get;
-        
+    regexMatch("""```([^\r\n]*)\r?\n([\s\S]*?\r?\n)```(\r?\n|\z)""".r) ^^ { m =>
+      {        
         val options = m.group(1)
         val code = m.group(2)
-        
+        // log("fencedcode " + options + " " + code)
         FencedCodeChunk(options, code)
       }
     }
 
   def textBlockWithBreak : Parser[ Chunk ] =
     rep( textLineWithEnd ) ~ hardBreakTextLine ^^ { case seq ~ break => {
+      //log("textblockwithbreak")
       TextChunk( foldedString(seq) + break.content ) }
     }
 
   def textBlock : Parser[ Chunk ] =
     rep1( textLine ) ^^ { seq => {
       val foo = foldedString(seq)
+      //log("textblock: " + foo)
       TextChunk( foo ) }
     }
   
   /** Match any line up until it ends with a newline. */
   def textLine : Parser[ Chunk ] =
     """[\t ]*\S[^\n]*\n?""".r ^^ { str =>{ 
+      //log("textline: " + str)
       TextChunk(str) 
       }}
 
   def textLineWithEnd : Parser[Chunk] =
     """[\t ]*\S[^\n]*[^ \n][ ]?\n""".r ^^ { str => {
+      //log("textlinewithend: " + str)
       TextChunk(str) }
     }
   
   def hardBreakTextLine : Parser[Chunk] =
-    """[\t ]*\S[^\n]*[ ]{2}\n""".r ^^ { s => TextChunk(s) }
+    """[\t ]*\S[^\n]*[ ]{2}\n""".r ^^ {
+    s => 
+      //log("hardbreaktextline: " + s)
+      TextChunk(s) 
+    }
 
   def bulletItem : Parser[ Chunk ] =
     bulletLead ~ rep( trailingLine ) ^^ {
@@ -188,7 +193,9 @@ class ChunkParser extends RegexParsers with StringExtras {
       probably have an asterix line indicator followed by an emphasis. */
   def leadingEmTextBlock : Parser[ Chunk ] =
     """[ ]{0,3}\*""".r ~ notEvenAsterixes ~ rep( textLine ) ^^ {
-      case ~(~(emLine, s), textSeq) => TextChunk( emLine + s + foldedString(textSeq) ) }
+      case ~(~(emLine, s), textSeq) => 
+            //log("leadingemtextblock")
+        TextChunk( emLine + s + foldedString(textSeq) ) }
   
   def notEvenAsterixes = new Parser[String] {
 
@@ -211,7 +218,9 @@ class ChunkParser extends RegexParsers with StringExtras {
       make the block a list item. */
   def leadingStrongTextBlock : Parser[ Chunk ] =
     """[ ]{0,3}\*\*[^*\n]+\*\*[^\n]*\n?""".r ~ rep( textLine ) ^^ {
-      case ~(strLine, textSeq) => TextChunk( strLine + foldedString(textSeq) ) }
+      case ~(strLine, textSeq) => 
+            //log("leadingstrongtextblock")
+        TextChunk( strLine + foldedString(textSeq) ) }
   
   def numberedItem : Parser[ Chunk ] =
     numberedLead ~ rep( trailingLine ) ^^ {
